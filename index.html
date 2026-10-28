@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en" class="dark bg-black">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#000000">
+<title>Virtual Meet Scorer – Athletic.net Entries</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { darkMode: 'class', theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'], mono: ['Fira Code','Courier New','monospace'] } } } }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body { font-family: 'Inter', sans-serif; }
+.cs::-webkit-scrollbar { width: 8px; height: 8px; }
+.cs::-webkit-scrollbar-track { background: #1e293b; }
+.cs::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+th { position: sticky; top: 0; background: #0f172a; }
+tr.ex td { opacity: .45; }
+</style>
+</head>
+<body class="min-h-screen bg-black text-slate-100">
+<header class="px-4 py-3 border-b border-slate-800 flex items-center gap-3">
+  <div class="text-emerald-400 text-xl">🏁</div>
+  <div>
+    <h1 class="font-semibold leading-tight">Virtual Meet Scorer</h1>
+    <p class="text-xs text-slate-400">Paste Athletic.net entries → seed-time results &amp; team scores, with exhibition teams</p>
+  </div>
+</header>
+
+<main class="grid lg:grid-cols-5 gap-4 p-4">
+  <!-- LEFT: input -->
+  <section class="lg:col-span-2 space-y-3">
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-2">
+      <div class="flex items-center justify-between">
+        <label class="text-sm font-medium">Paste entries</label>
+        <div class="flex gap-2 text-xs">
+          <button id="sampleBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700">Sample</button>
+          <button id="clearBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700">Clear</button>
+        </div>
+      </div>
+      <textarea id="input" rows="14" spellcheck="false" placeholder="Paste straight from Athletic.net (tab-separated). You can paste several events/genders back to back; each header line starts a new event."
+        class="cs w-full bg-black border border-slate-700 rounded p-2 font-mono text-xs text-emerald-300 whitespace-pre"></textarea>
+      <p id="status" class="text-xs text-slate-400"></p>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-lg p-3 space-y-3 text-sm">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Meet title (for copied text)</label>
+        <input id="title" class="w-full bg-black border border-slate-700 rounded px-2 py-1" placeholder="e.g. OHSAA Region 4 Cross Country">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="block text-xs text-slate-400 mb-1">Venue</label>
+          <input id="venue" class="w-full bg-black border border-slate-700 rounded px-2 py-1"></div>
+        <div><label class="block text-xs text-slate-400 mb-1">Date</label>
+          <input id="date" class="w-full bg-black border border-slate-700 rounded px-2 py-1"></div>
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1">Race header override (optional; Boys/Girls auto-swapped)</label>
+        <input id="raceHdr" class="w-full bg-black border border-slate-700 rounded px-2 py-1" placeholder="e.g. Boys Division II 5000 Meter Run">
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-300">
+        <label class="flex items-center gap-1"><input id="flip" type="checkbox" checked> Last, First names</label>
+        <label class="flex items-center gap-1"><input id="girlsFirst" type="checkbox" checked> Girls before Boys</label>
+        <label class="flex items-center gap-1"><input id="resLabel" type="checkbox" checked> "Results" line</label>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Scoring</label>
+          <select id="mode" class="w-full bg-black border border-slate-700 rounded px-2 py-1">
+            <option value="xc">Cross country (top 5 score, 6–7 displace)</option>
+            <option value="pts">Points by place (track/field)</option>
+          </select>
+        </div>
+        <div id="xcOpts">
+          <label class="block text-xs text-slate-400 mb-1">Scorers needed</label>
+          <input id="xcN" type="number" min="1" value="5" class="w-full bg-black border border-slate-700 rounded px-2 py-1">
+        </div>
+        <div id="ptsOpts" class="hidden col-span-2 grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">Points (1st, 2nd, …)</label>
+            <input id="pts" value="10,8,6,5,4,3,2,1" class="w-full bg-black border border-slate-700 rounded px-2 py-1 font-mono">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Max scorers/team</label>
+            <input id="maxN" type="number" min="0" value="0" placeholder="0=none" class="w-full bg-black border border-slate-700 rounded px-2 py-1">
+          </div>
+        </div>
+      </div>
+      <label class="flex items-start gap-2 text-xs text-slate-300">
+        <input id="displace" type="checkbox" class="mt-0.5">
+        <span>Exhibition athletes <b>displace</b> scorers (count toward place numbers). Off = they are ignored completely for team scoring, so the next real athlete moves up.</span>
+      </label>
+    </div>
+
+    <div id="exPanel" class="space-y-3"></div>
+  </section>
+
+  <!-- RIGHT: output -->
+  <section class="lg:col-span-3 space-y-3">
+    <div class="flex flex-wrap items-center gap-2">
+      <input id="filter" placeholder="Filter athletes / teams…" class="flex-1 min-w-[10rem] bg-slate-900 border border-slate-700 rounded px-2 py-1 text-sm">
+      <button id="copyTxt" class="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-sm font-medium">Copy text</button>
+      <button id="dlHtml" class="px-3 py-1 rounded bg-sky-600 hover:bg-sky-500 text-sm font-medium">Download .htm</button>
+      <button id="copyHtml" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-sm font-medium">Copy flat HTML</button>
+      <button id="dlTxt" class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-sm font-medium">Download .txt</button>
+    </div>
+    <details open class="bg-slate-900 border border-slate-800 rounded-lg">
+      <summary class="px-3 py-2 text-sm font-medium cursor-pointer">Export preview (what the flat HTML / .htm file will contain)</summary>
+      <pre id="preview" class="cs overflow-auto max-h-[32rem] p-3 text-[11px] leading-snug font-mono text-emerald-300 bg-black"></pre>
+    </details>
+    <div id="results" class="space-y-6"></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let events = [];
+const exTeams = new Set();     // "evIdx|team"
+const athOver = new Map();     // "evIdx|athIdx" -> true/false (manual override)
+
+/* ───────── Parsing ───────── */
+function parseMark(raw) {
+  let s = raw.trim().replace(/[a-zA-Z@*#]+$/, m => /m$/i.test(raw.trim()) ? 'm' : '');
+  let m;
+  if ((m = s.match(/^(?:(\d+):)?(\d{1,2}):(\d{2}(?:\.\d+)?)$/))) return { v: (+(m[1]||0))*3600 + (+m[2])*60 + (+m[3]), higher: false };
+  if ((m = s.match(/^(\d+)[-'’]\s*(\d+(?:\.\d+)?)"?$/))) return { v: (+m[1])*12 + (+m[2]), higher: true };
+  if ((m = s.match(/^(\d+(?:\.\d+)?)m$/i))) return { v: +m[1], higher: true };
+  if (/^\d+\.\d+$/.test(s)) return { v: +s, higher: false };
+  return null;
+}
+function parseAthlete(line) {
+  const cells = (line.includes('\t') ? line.split(/\t+/) : line.split(/\s{2,}/)).map(s => s.trim()).filter(Boolean);
+  if (cells.length < 3) return null;
+  let i = 0, grade = '';
+  if (/^\d{1,2}$/.test(cells[0]) || /^(FR|SO|JR|SR)$/i.test(cells[0])) { grade = cells[0]; i = 1; }
+  const name = cells[i];
+  for (let j = i + 1; j < cells.length; j++) {
+    const p = parseMark(cells[j]);
+    if (p) return { grade, name, markStr: cells[j], v: p.v, higher: p.higher, team: cells[j+1] || 'Unattached', prev: cells.slice(j+2).join(' ') };
+  }
+  return null;
+}
+function parse(text) {
+  const evs = []; let cur = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trimEnd(); if (!line.trim()) continue;
+    const a = parseAthlete(line);
+    if (a) { if (!cur) { cur = { title: 'Event 1', ath: [] }; evs.push(cur); } cur.ath.push(a); }
+    else { cur = { title: line.trim(), ath: [] }; evs.push(cur); }
+  }
+  return evs.filter(e => e.ath.length).map((e, idx) => { e.idx = idx; e.higher = e.ath[0].higher; return e; });
+}
+
+/* ───────── Scoring ───────── */
+const isEx = (ev, ai) => {
+  const k = ev.idx + '|' + ai;
+  return athOver.has(k) ? athOver.get(k) : exTeams.has(ev.idx + '|' + ev.ath[ai].team);
+};
+function scoreEvent(ev) {
+  const mode = $('mode').value, displace = $('displace').checked;
+  const order = ev.ath.map((a, i) => i).sort((x, y) => ev.higher ? ev.ath[y].v - ev.ath[x].v : ev.ath[x].v - ev.ath[y].v);
+  ev.order = order;
+  order.forEach((ai, r) => { const a = ev.ath[ai]; a.overall = r + 1; a.ex = isEx(ev, ai); a.pts = null; });
+  let pl = 0;
+  order.forEach(ai => { const a = ev.ath[ai]; a.place = a.ex ? 'EX' : (displace ? a.overall : ++pl); });
+
+  const teamN = {};
+  ev.ath.forEach(a => { if (!a.ex) teamN[a.team] = (teamN[a.team] || 0) + 1; });
+  const scored = [], incomplete = [];
+
+  if (mode === 'xc') {
+    const N = Math.max(1, +$('xcN').value || 5);
+    const complete = new Set(Object.keys(teamN).filter(t => teamN[t] >= N && t.toLowerCase() !== 'unattached'));
+    Object.keys(teamN).forEach(t => { if (!complete.has(t)) incomplete.push({ team: t, n: teamN[t] }); });
+    const det = {}, cnt = {};
+    complete.forEach(t => { det[t] = { sc: [], dp: [], times: [] }; cnt[t] = 0; });
+    let next = 1;
+    order.forEach(ai => {
+      const a = ev.ath[ai];
+      if (a.ex) { if (displace) next++; return; }
+      if (!complete.has(a.team) || cnt[a.team] >= N + 2) return;
+      a.pts = next++;
+      (cnt[a.team]++ < N ? det[a.team].sc : det[a.team].dp).push(a.pts);
+      det[a.team].times.push(a.v);
+    });
+    complete.forEach(t => {
+      const d = det[t], ts = [...d.times].sort((x, y) => x - y), sum = ts.slice(0, N).reduce((s, x) => s + x, 0);
+      scored.push({ team: t, total: d.sc.reduce((s, x) => s + x, 0), places: d.sc, disp: d.dp, tb: d.dp[0] || Infinity,
+        totalTime: sum, avg: sum / N, spread: ts.length >= N ? ts[N - 1] - ts[0] : 0 });
+    });
+    scored.sort((a, b) => a.total - b.total || a.tb - b.tb);
+  } else {
+    const ptsArr = $('pts').value.split(/[,\s]+/).filter(Boolean).map(Number).filter(x => !isNaN(x));
+    const cap = +$('maxN').value || Infinity, cnt = {}, tot = {};
+    order.forEach(ai => {
+      const a = ev.ath[ai]; if (a.ex) return;
+      const p = ptsArr[a.place - 1] || 0;
+      if (p > 0 && (cnt[a.team] || 0) < cap) { cnt[a.team] = (cnt[a.team] || 0) + 1; a.pts = p; (tot[a.team] = tot[a.team] || []).push(p); }
+    });
+    Object.keys(tot).forEach(t => scored.push({ team: t, total: tot[t].reduce((s, x) => s + x, 0), places: tot[t], disp: [] }));
+    scored.sort((a, b) => b.total - a.total);
+  }
+  ev.scored = scored; ev.incomplete = incomplete;
+  ev.exTeamNames = [...new Set(ev.ath.filter(a => a.ex).map(a => a.team))];
+}
+
+/* ───────── Rendering ───────── */
+function render() {
+  const mode = $('mode').value;
+  $('xcOpts').classList.toggle('hidden', mode !== 'xc');
+  $('ptsOpts').classList.toggle('hidden', mode === 'xc');
+  events.forEach(scoreEvent);
+  renderExPanel();
+  const f = $('filter').value.toLowerCase().trim();
+  $('results').innerHTML = events.map(ev => {
+    const teamRows = ev.scored.map((t, i) => `<tr class="border-t border-slate-800">
+      <td class="px-2 py-1">${i + 1}</td><td class="px-2 py-1 font-medium">${esc(t.team)}</td>
+      <td class="px-2 py-1 text-emerald-400 font-semibold">${t.total}</td>
+      <td class="px-2 py-1 font-mono text-xs text-slate-300">${t.places.join('-')}${t.disp && t.disp.length ? ' <span class="text-slate-500">(' + t.disp.join(', ') + ')</span>' : ''}</td></tr>`).join('');
+    const inc = ev.incomplete.length ? `<p class="text-xs text-slate-500 px-2 py-1">Not enough runners to score: ${ev.incomplete.sort((a,b)=>b.n-a.n).map(t => esc(t.team) + ' (' + t.n + ')').join(', ')}</p>` : '';
+    const exNote = ev.exTeamNames.length ? `<p class="text-xs text-amber-400 px-2 pb-1">Exhibition: ${ev.exTeamNames.map(esc).join(', ')}</p>` : '';
+    const rows = ev.order.map(ai => {
+      const a = ev.ath[ai];
+      if (f && !(a.name + ' ' + a.team).toLowerCase().includes(f)) return '';
+      return `<tr class="border-t border-slate-800 ${a.ex ? 'ex' : ''}">
+        <td class="px-2 py-1">${a.ex ? '<span class="text-amber-400 font-semibold">EX</span>' : a.place}</td>
+        <td class="px-2 py-1 text-emerald-400">${a.pts ?? ''}</td>
+        <td class="px-2 py-1">${esc(a.name)}</td><td class="px-2 py-1">${esc(a.grade)}</td>
+        <td class="px-2 py-1">${esc(a.team)}</td><td class="px-2 py-1 font-mono">${esc(a.markStr)}</td>
+        <td class="px-2 py-1 text-xs text-slate-500">${esc(a.prev)}</td>
+        <td class="px-2 py-1"><button data-ath="${ev.idx}|${ai}" class="tog text-xs px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700">${a.ex ? 'Include' : 'Exhibit'}</button></td></tr>`;
+    }).join('');
+    return `<div class="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
+      <h2 class="px-3 py-2 font-semibold border-b border-slate-800">${esc(ev.title)}</h2>
+      <h3 class="px-3 pt-2 text-xs uppercase tracking-wide text-slate-400">Team scores</h3>
+      <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-400"><th class="px-2 py-1">Pl</th><th class="px-2 py-1">Team</th><th class="px-2 py-1">Pts</th><th class="px-2 py-1">Scorers${mode==='xc'?' (displacers)':' (points)'}</th></tr></thead><tbody>${teamRows || '<tr><td colspan="4" class="px-2 py-2 text-slate-500">No teams scored</td></tr>'}</tbody></table></div>
+      ${inc}${exNote}
+      <h3 class="px-3 pt-2 text-xs uppercase tracking-wide text-slate-400">Individual results</h3>
+      <div class="cs overflow-auto max-h-[28rem]"><table class="w-full text-sm"><thead><tr class="text-left text-xs text-slate-400"><th class="px-2 py-1">Pl</th><th class="px-2 py-1">Pts</th><th class="px-2 py-1">Name</th><th class="px-2 py-1">Gr</th><th class="px-2 py-1">Team</th><th class="px-2 py-1">Mark</th><th class="px-2 py-1">Notes</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  }).join('');
+  $('preview').textContent = events.length ? buildFile() : '';
+  $('status').textContent = events.length
+    ? `${events.length} event(s), ${events.reduce((s, e) => s + e.ath.length, 0)} athletes parsed.`
+    : ($('input').value.trim() ? 'No athletes recognized. Paste with tabs intact (straight from Athletic.net).' : '');
+}
+
+function renderExPanel() {
+  $('exPanel').innerHTML = events.map(ev => {
+    const counts = {}, qual = {};
+    ev.ath.forEach(a => { counts[a.team] = (counts[a.team] || 0) + 1; if (/\bt\d+\b/.test(a.prev)) qual[a.team] = true; });
+    const hasTags = ev.ath.some(a => /\b[tp]\d+\b/.test(a.prev));
+    const teams = Object.keys(counts).sort((a, b) => a.localeCompare(b));
+    return `<div class="bg-slate-900 border border-slate-800 rounded-lg p-3">
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="text-sm font-medium">Exhibition teams – <span class="text-slate-400">${esc(ev.title)}</span></h3>
+        <div class="flex gap-1 text-xs">
+          ${hasTags ? `<button data-auto="${ev.idx}" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700" title="Marks teams that have no tN (team-qualifier) tag on any athlete">Auto-detect</button>` : ''}
+          <button data-clr="${ev.idx}" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700">Clear</button>
+        </div></div>
+      <div class="cs flex flex-wrap gap-1 max-h-48 overflow-auto">
+        ${teams.map(t => `<label class="flex items-center gap-1 text-xs px-2 py-1 rounded border ${exTeams.has(ev.idx + '|' + t) ? 'border-amber-500 text-amber-300' : 'border-slate-700 text-slate-300'} cursor-pointer">
+          <input type="checkbox" data-team="${ev.idx}|${esc(t)}" ${exTeams.has(ev.idx + '|' + t) ? 'checked' : ''}>${esc(t)} <span class="text-slate-500">${counts[t]}${hasTags && !qual[t] ? '·p' : ''}</span></label>`).join('')}
+      </div></div>`;
+  }).join('');
+}
+
+/* ───────── Converter-style text output ───────── */
+const W = 87;
+function pad(v, len, align = 'left') {
+  v = String(v == null ? '' : v).trim();
+  v = v.length > len ? v.substring(0, len - 1) + '…' : v.substring(0, len);
+  if (align === 'right') return v.padStart(len);
+  return v.padEnd(len);
+}
+const center = (v, w = W) => { v = String(v || '').trim(); return v.length >= w ? v : ' '.repeat(Math.floor((w - v.length) / 2)) + v; };
+function flipName(n) {
+  n = n.trim().replace(/`/g, '');
+  if (!$('flip').checked || n.includes(',')) return n;
+  const parts = n.split(/\s+/); if (parts.length < 2) return n;
+  if (/^(jr|sr|ii|iii|iv)\.?$/i.test(parts[parts.length - 1]) && parts.length >= 3) { const sfx = parts.pop(), last = parts.pop(); return `${last}, ${parts.join(' ')} ${sfx}`; }
+  const last = parts.pop(); return `${last}, ${parts.join(' ')}`;
+}
+function fmtTime(sec) {
+  if (!isFinite(sec)) return '--';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60), t = Math.round((sec % 1) * 10);
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}.${t}` : `${m}:${ss}.${t}`;
+}
+const genderOf = t => /\b(girls|womens|women's|women)\b/i.test(t) ? 'girls' : 'boys';
+function swapGender(val, toGirls) {
+  if (toGirls ? /\b(Girls|Womens|Women's|Women)\b/i.test(val) : /\b(Boys|Mens|Men's|Men)\b/i.test(val)) return val;
+  for (const [b, g] of [['Boys', 'Girls'], ['Mens', 'Womens'], ["Men's", "Women's"], ['Men', 'Women']]) {
+    const from = toGirls ? b : g, to = toGirls ? g : b, re = new RegExp('\\b' + from + '\\b', 'gi');
+    if (re.test(val)) return val.replace(re, m => m === m.toUpperCase() ? to.toUpperCase() : m === m.toLowerCase() ? to.toLowerCase() : to);
+  }
+  return (toGirls ? 'Girls ' : 'Boys ') + val;
+}
+function evtTitle(ev, g, both) {
+  const custom = $('raceHdr').value.trim();
+  if (custom) return both ? swapGender(custom, g === 'girls') : custom;
+  const base = ev.title.replace(/\b(Mens|Womens|Men's|Women's|Men|Women|Boys|Girls)\b/ig, '').replace(/\s+/g, ' ').trim();
+  return (g === 'girls' ? 'Girls ' : 'Boys ') + base;
+}
+function athLine(a, ptsW) {
+  const place = a.ex ? '   EX' : pad(a.place, 5, 'right');
+  const r = a.markStr.trim();
+  return `${place}  ${pad(flipName(a.name), 24)} ${pad(a.grade, 2)} ${pad(a.team, 33)}${r.padStart(Math.max(7, r.length))}${pad(a.pts == null ? '' : a.pts, ptsW, 'right')}\n`;
+}
+function exNote(ev) {
+  return ev.exTeamNames.length ? `\nExhibition (not scored): ${ev.exTeamNames.join(', ')}\n` : '';
+}
+function buildXC(ev, g, both) {
+  const sep = '='.repeat(W);
+  let out = `\n${evtTitle(ev, g, both)}\n${sep}\n`;
+  out += pad('Place', 5, 'right') + '  ' + pad('Athlete', 24) + ' ' + pad('Yr', 2) + ' ' + pad('School', 33) + pad('Finals', 7, 'right') + pad('Pts', 12, 'right') + '\n' + sep + '\n';
+  ev.order.forEach(ai => { out += athLine(ev.ath[ai], 12); });
+  if (ev.scored.length) {
+    out += `\n                                 Team Scores\n${sep}\n`;
+    out += pad('Rank', 5, 'right') + '  ' + pad('Team', 25) + ' ' + pad('Total', 6, 'right') + '    1    2    3    4    5   *6   *7\n' + sep + '\n';
+    ev.scored.forEach((t, i) => {
+      const line = [...t.places, ...t.disp].map(p => pad(String(p), 5, 'right')).join('');
+      out += `${pad(String(i + 1), 5, 'right')}  ${pad(t.team, 25)} ${pad(String(t.total), 6, 'right')}  ${line}\n`;
+      out += `         Total Time:  ${fmtTime(t.totalTime)}\n            Average:  ${fmtTime(t.avg)}\n         1-5 Spread:  ${fmtTime(t.spread)}\n`;
+    });
+  }
+  if (ev.incomplete.length) {
+    out += `\nIncomplete Teams (fewer than ${+$('xcN').value || 5} finishers):\n`;
+    ev.incomplete.forEach(t => { out += ` * ${t.team} (${t.n} finishers)\n`; });
+  }
+  return out + exNote(ev);
+}
+function buildPts(ev, g, both) {
+  const sep = '='.repeat(W);
+  let out = `\n${evtTitle(ev, g, both)}\n${sep}\n`;
+  out += pad('Place', 5, 'right') + '  ' + pad('Athlete', 24) + ' ' + pad('Yr', 2) + ' ' + pad('School', 33) + pad('Finals', 7, 'right') + pad('Pts', 12, 'right') + '\n' + sep + '\n';
+  ev.order.forEach(ai => { out += athLine(ev.ath[ai], 12); });
+  return out + exNote(ev);
+}
+function standingsBlock(g, evs) {
+  const tot = {};
+  evs.forEach(ev => ev.scored.forEach(t => { tot[t.team] = (tot[t.team] || 0) + t.total; }));
+  const sorted = Object.entries(tot).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  if (!sorted.length) return '';
+  let b = '\n' + center(`${g === 'girls' ? 'Girls' : 'Boys'} - Team Rankings`) + '\n' + '='.repeat(W) + '\n';
+  for (let i = 0; i < sorted.length; i += 2) {
+    const fmt = v => String(+v.toFixed(2));
+    let line = '    ' + pad(`${i + 1}) ${sorted[i][0]}`, 32) + pad(fmt(sorted[i][1]), 8, 'right');
+    if (sorted[i + 1]) line += '   ' + pad(`${i + 2}) ${sorted[i + 1][0]}`, 32) + pad(fmt(sorted[i + 1][1]), 8, 'right');
+    b += line + '\n';
+  }
+  return b;
+}
+function buildFile() {
+  const T = $('title').value.trim(), V = $('venue').value.trim(), D = $('date').value.trim();
+  let h = '';
+  if (T) h += center(T) + '\n'; if (V) h += center(V) + '\n'; if (D) h += center(D) + '\n';
+  if ($('resLabel').checked) h += center('Results') + '\n';
+  const order = $('girlsFirst').checked ? ['girls', 'boys'] : ['boys', 'girls'];
+  const xc = $('mode').value === 'xc';
+  const both = events.some(e => genderOf(e.title) === 'girls') && events.some(e => genderOf(e.title) === 'boys');
+  let body = '';
+  order.forEach(g => {
+    const evs = events.filter(e => genderOf(e.title) === g);
+    evs.forEach(ev => { body += xc ? buildXC(ev, g, both) : buildPts(ev, g, both); });
+    if (!xc) body += standingsBlock(g, evs);
+  });
+  return h + body;
+}
+function flatHtml() {
+  const t = buildFile().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return `<!-- saved from url=(0022)http://internet.e-mail -->\n<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"></head><body>\n<p>\n<pre>${t}\n</pre>\n\n\n</body></html>`;
+}
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function fname(ext) {
+  const t = $('title').value.trim().replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '_') || 'virtual_meet';
+  const d = $('date').value.trim().replace(/[^a-zA-Z0-9_\-]/g, '');
+  return (d ? t + '_' + d : t) + ext;
+}
+function copy(text, btn) {
+  navigator.clipboard.writeText(text).then(() => { const o = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = o, 1200); });
+}
+$('dlHtml').onclick = () => events.length && download(fname('.htm'), flatHtml(), 'text/html');
+$('copyHtml').onclick = e => events.length && copy(flatHtml(), e.target);
+$('dlTxt').onclick = () => events.length && download(fname('.txt'), buildFile(), 'text/plain');
+$('copyTxt').onclick = e => events.length && copy(buildFile(), e.target);
+
+/* ───────── Events ───────── */
+$('input').addEventListener('input', () => { events = parse($('input').value); render(); });
+['mode','xcN','pts','maxN','displace','title','venue','date','raceHdr','flip','girlsFirst','resLabel'].forEach(id => $(id).addEventListener('input', render));
+$('filter').addEventListener('input', render);
+$('clearBtn').onclick = () => { $('input').value = ''; exTeams.clear(); athOver.clear(); events = []; render(); };
+$('sampleBtn').onclick = () => { $('input').value = SAMPLE; events = parse(SAMPLE); render(); };
+
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.ath) { const [ei, ai] = t.dataset.ath.split('|'); const ev = events[ei]; athOver.set(t.dataset.ath, !isEx(ev, +ai)); render(); }
+  else if (t.dataset.clr !== undefined) { const i = t.dataset.clr; [...exTeams].filter(k => k.startsWith(i + '|')).forEach(k => exTeams.delete(k)); [...athOver.keys()].filter(k => k.startsWith(i + '|')).forEach(k => athOver.delete(k)); render(); }
+  else if (t.dataset.auto !== undefined) {
+    const ev = events[t.dataset.auto], q = new Set();
+    ev.ath.forEach(a => { if (/\bt\d+\b/.test(a.prev)) q.add(a.team); });
+    ev.ath.forEach(a => { if (!q.has(a.team)) exTeams.add(ev.idx + '|' + a.team); });
+    render();
+  }
+});
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.team; if (!k) return;
+  const key = k.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  e.target.checked ? exTeams.add(key) : exTeams.delete(key);
+  render();
+});
+
+const SAMPLE = `Mens 5,000 Meters D2 Boys
+12	Ian Res		15:20.3		West Geauga	Madison i2 t5
+11	Anderson Seredick		15:21.6		Nordonia	Madison i1 t2
+12	Dylan White		15:25.3		Boardman	GlenOak i3 t7
+11	John Owens		15:38.2		Revere	Lorain i5 t7
+12	Brennan Coley		15:38.8		University School	Madison i3 t4
+12	Aiden Flynn		15:41.0		Nordonia	Madison i4 t2
+12	Thomas Lodowski		15:45.5		University School	Madison i10 t4
+12	Isaac Solomon		15:49.6		CVCA	Lorain i1 t1
+12	Andrew Clark		15:57.6		CVCA	Lorain i3 t1
+11	Zac Andamasaris		16:08.7		CVCA	Lorain i2 t1
+11	Parker Lame		16:39.6		Austintown-Fitch	GlenOak i1 p23
+12	Colten McCutcheon		18:08.6		Austintown-Fitch	GlenOak i24 p111
+12	Ethan Jarvis		17:38.3		Austintown-Fitch	GlenOak i10 p77
+12	Sawyer Williams		18:51.1		Austintown-Fitch	GlenOak i22 p108
+11	Jackson Berni		17:23.6		Austintown-Fitch	GlenOak i9 p62
+12	Nathan Fox		17:47.9		Cuy. Falls	GlenOak i17 p96
+11	Max Gursky		16:49.8		Hoban	GlenOak i2 p33
+11	AJ Clemans		17:25.3		Hoban	GlenOak i6 p52
+9	Griffin Thomas		18:17.9		Hoban	GlenOak i12 p84
+9	Ethan Baxter		18:33.8		Hoban	GlenOak i16 p94
+11	Ryan Sweeney		16:28.7		Twinsburg	Madison i15 t9
+11	Eli Rowbotham		16:45.8		Twinsburg	Madison i21 t9
+12	Marsean Randall		17:33.2		Twinsburg	Madison i52 t9
+9	Isaac Hopp		17:50.8		Twinsburg	Madison i62 t9
+9	Arjun Tang		18:13.3		Twinsburg	Madison i76 t9`;
+</script>
+</body>
+</html>
