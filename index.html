@@ -89,7 +89,7 @@ tr.ex td { opacity: .45; }
       </div>
       <label class="flex items-start gap-2 text-xs text-slate-300">
         <input id="displace" type="checkbox" class="mt-0.5">
-        <span>Exhibition athletes <b>displace</b> scorers (count toward place numbers). Off = they are ignored completely for team scoring, so the next real athlete moves up.</span>
+        <span>Exhibition athletes <b>displace</b> scorers (use up a scoring number). Off = they keep their overall place but are ignored for team scoring, so the next real athlete's points move up.</span>
       </label>
     </div>
 
@@ -164,8 +164,7 @@ function scoreEvent(ev) {
   const order = ev.ath.map((a, i) => i).sort((x, y) => ev.higher ? ev.ath[y].v - ev.ath[x].v : ev.ath[x].v - ev.ath[y].v);
   ev.order = order;
   order.forEach((ai, r) => { const a = ev.ath[ai]; a.overall = r + 1; a.ex = isEx(ev, ai); a.pts = null; });
-  let pl = 0;
-  order.forEach(ai => { const a = ev.ath[ai]; a.place = a.ex ? 'EX' : (displace ? a.overall : ++pl); });
+  order.forEach(ai => { const a = ev.ath[ai]; a.place = a.overall; });
 
   const teamN = {};
   ev.ath.forEach(a => { if (!a.ex) teamN[a.team] = (teamN[a.team] || 0) + 1; });
@@ -195,9 +194,10 @@ function scoreEvent(ev) {
   } else {
     const ptsArr = $('pts').value.split(/[,\s]+/).filter(Boolean).map(Number).filter(x => !isNaN(x));
     const cap = +$('maxN').value || Infinity, cnt = {}, tot = {};
+    let sp = 0;
     order.forEach(ai => {
-      const a = ev.ath[ai]; if (a.ex) return;
-      const p = ptsArr[a.place - 1] || 0;
+      const a = ev.ath[ai]; if (a.ex) { if (displace) sp++; return; }
+      const p = ptsArr[sp++] || 0;
       if (p > 0 && (cnt[a.team] || 0) < cap) { cnt[a.team] = (cnt[a.team] || 0) + 1; a.pts = p; (tot[a.team] = tot[a.team] || []).push(p); }
     });
     Object.keys(tot).forEach(t => scored.push({ team: t, total: tot[t].reduce((s, x) => s + x, 0), places: tot[t], disp: [] }));
@@ -226,8 +226,8 @@ function render() {
       const a = ev.ath[ai];
       if (f && !(a.name + ' ' + a.team).toLowerCase().includes(f)) return '';
       return `<tr class="border-t border-slate-800 ${a.ex ? 'ex' : ''}">
-        <td class="px-2 py-1">${a.ex ? '<span class="text-amber-400 font-semibold">EX</span>' : a.place}</td>
-        <td class="px-2 py-1 text-emerald-400">${a.pts ?? ''}</td>
+        <td class="px-2 py-1">${a.place}</td>
+        <td class="px-2 py-1 text-emerald-400">${a.ex ? '<span class="text-amber-400 font-semibold">EX</span>' : (a.pts ?? '')}</td>
         <td class="px-2 py-1">${esc(a.name)}</td><td class="px-2 py-1">${esc(a.grade)}</td>
         <td class="px-2 py-1">${esc(a.team)}</td><td class="px-2 py-1 font-mono">${esc(a.markStr)}</td>
         <td class="px-2 py-1 text-xs text-slate-500">${esc(a.prev)}</td>
@@ -306,9 +306,9 @@ function evtTitle(ev, g, both) {
   return (g === 'girls' ? 'Girls ' : 'Boys ') + base;
 }
 function athLine(a, ptsW) {
-  const place = a.ex ? '   EX' : pad(a.place, 5, 'right');
+  const place = pad(a.place, 5, 'right');
   const r = a.markStr.trim();
-  return `${place}  ${pad(flipName(a.name), 24)} ${pad(a.grade, 2)} ${pad(a.team, 33)}${r.padStart(Math.max(7, r.length))}${pad(a.pts == null ? '' : a.pts, ptsW, 'right')}\n`;
+  return `${place}  ${pad(flipName(a.name), 24)} ${pad(a.grade, 2)} ${pad(a.team, 33)}${r.padStart(Math.max(7, r.length))}${pad(a.ex ? 'EX' : (a.pts == null ? '' : a.pts), ptsW, 'right')}\n`;
 }
 function exNote(ev) {
   return ev.exTeamNames.length ? `\nExhibition (not scored): ${ev.exTeamNames.join(', ')}\n` : '';
